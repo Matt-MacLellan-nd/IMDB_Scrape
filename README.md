@@ -45,6 +45,20 @@ def scrape_ids(url, headers):
         return []
 ``` 
 
+- Regression, visualization, and correlation
+Used smf.ols regression to get stats like R, R^2, and coefficient
+- Visualized with scatter plots
+Used .corr to get the correlation of the outcome variables. 
+
+
 ## Results
 - Visualizations created using Matplotlib and Seaborn libraries in Python
+
+![My Plot](final_plot.png)
+
+- Overall, there was no significant relationship between IMDB rating and Gross Sales (US & Canada)
+
+- There are some interesting differences between the two groups:
+    The “Top Movies” group had a much higher correlation between Rating and Gross (.21 vs .006). This suggests some meaningful signal in ratings as a predictor for top movies(very small).
+        However, the slope for the “Top Movies” was smaller, likely due to the compressed nature of the ratings (tighter x-axis range)
 

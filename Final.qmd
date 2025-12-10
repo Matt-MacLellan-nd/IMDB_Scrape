@@ -1,0 +1,263 @@
+---
+title: "Final"
+format: html
+---
+
+
+```{python}
+import requests
+from bs4 import BeautifulSoup
+
+
+
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept-Language': 'en-US,en;q=0.9'
+}
+
+
+list_url_1 = 'https://www.imdb.com/search/title/?title_type=feature&release_date=1980-01-01,2024-12-31&user_rating=1,10&num_votes=1000,' 
+top_movies_url = 'https://www.imdb.com/chart/top/?ref_=hm_nv_menu' 
+
+
+
+def scrape_ids(url, headers):
+    """Fetches a URL and extracts unique TT IDs from all /title/tt links."""
+    movie_ids = []
+    
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status() 
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Find ALL links (<a> tags) on the page whose 'href' attribute starts with '/title/tt'
+        for link in soup.find_all('a', href=lambda href: href and href.startswith('/title/tt')):
+            
+            full_link = link.get('href')
+            link_parts = full_link.split('/')
+            
+            # The TT ID is the third part of the URL path
+            if len(link_parts) >= 3 and link_parts[2].startswith('tt'):
+                tt_id = link_parts[2]
+                
+                if tt_id not in movie_ids:
+                    movie_ids.append(tt_id)
+        
+        return movie_ids
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching {url}: {e}")
+        return []
+
+
+
+# Scrape  first list
+print("--- Scraping List 1 ---")
+movie_ids_1 = scrape_ids(list_url_1, headers)
+print(f"Collected {len(movie_ids_1)} unique movie IDs from List 1.")
+
+#Scrape the second list
+print("\n--- Scraping List 2 (Example) ---")
+movie_ids_2 = scrape_ids(top_movies_url, headers)
+print(f"Collected {len(movie_ids_2)} unique movie IDs from List 2.")
+
+
+```
+
+
+```{python}
+import requests
+from bs4 import BeautifulSoup
+
+base_url = "https://www.imdb.com/title/{}/"
+
+headers = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36" ),
+    "Accept-Language": "en-US,en;q=0.9"
+}
+
+#Make function that can be applied to both lists
+def scrape_movie_data(movie_id):
+    url = base_url.format(movie_id)
+    response = requests.get(url, headers=headers)
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    
+    title = None
+    
+    # Struggled to pull the Title. This uses a few different options
+    h1 = soup.find("h1", attrs={"data-testid": "hero_pageTitle"})
+    if h1:
+        sp = h1.find("span", attrs={"data-testid": "hero_primary-text"})
+        if sp:
+            title = sp.get_text(strip=True)
+
+    
+    if not title:
+        sp = soup.find("span", attrs={"data-testid": "hero_primary-text"})
+        if sp:
+            title = sp.get_text(strip=True)
+
+    
+    if not title:
+        h1 = soup.find("h1")
+        if h1:
+            title = h1.get_text(" ", strip=True)
+
+    # Now get the rating
+    rating = None
+    rating_div = soup.find("div", attrs={"data-testid": "hero-rating-bar__aggregate-rating__score"})
+    if rating_div:
+        try:
+            rating = float(rating_div.get_text(strip=True).split("/")[0])
+        except:
+            rating = None
+
+    # Now get the Gross sales
+    gross = None
+    gross_item = soup.find("li", attrs={"data-testid": "title-boxoffice-grossdomestic"})
+    if gross_item:
+        value = gross_item.find("span", class_="ipc-metadata-list-item__list-content-item")
+        if value:
+            try:
+                gross = int(value.get_text(strip=True).replace("$", "").replace(",", ""))
+            except:
+                gross = None
+
+    return {
+        "title":title,
+        "movie_id": movie_id,
+        "rating": rating,
+        "gross_us_canada": gross
+    }
+
+#Make a new function to apply old function to a list instead of single movie
+def scrape_many_movies(movie_ids_1):
+    results = []
+    for movie_id in movie_ids_1:
+        print(f"Scraping {movie_id} ...")
+        results.append(scrape_movie_data(movie_id))
+    return results
+
+
+recent_movie_data = scrape_many_movies(movie_ids_1)
+top_25_movie_data = scrape_many_movies(movie_ids_2)
+```
+
+
+```{python}
+import pandas as pd
+
+#move to df and then csv for safety
+recent_movie_df = pd.DataFrame(recent_movie_data)
+top_25_movie_df = pd.DataFrame(top_25_movie_data)
+recent_movie_df
+top_25_movie_df
+
+recent_movie_df.to_csv("recent_movie_data.csv", index=False)
+top_25_movie_df.to_csv("top_25_data.csv", index=False)
+
+recent_movie_df = pd.read_csv("/Users/matthewmaclellan/Documents/Courses/Unstructured_d_a/recent_movie_data.csv")
+top_25_movie_df = pd.read_csv("/Users/matthewmaclellan/Documents/Courses/Unstructured_d_a/top_25_data.csv")
+```
+
+
+
+```{python}
+#Analysis
+#Get correlation between our two varaibles in our two groups
+
+corr_recent = recent_movie_df[['rating', 'gross_us_canada']].corr().iloc[0,1]
+corr_top = top_25_movie_df[['rating', 'gross_us_canada']].corr().iloc[0,1]
+
+recent_movie_df['gross_us_canada'].fillna(0)
+top_25_movie_df['gross_us_canada'].fillna(0)
+
+```
+
+
+```{python}
+from sklearn.linear_model import LinearRegression
+import numpy as np
+
+# ONly NaNs in dataset refer to movies that could be considered 0 (no figure for one and other was direct to streaming)
+
+
+clean_recent_movie_df = recent_movie_df.copy()
+clean_recent_movie_df['gross_us_canada'] = clean_recent_movie_df['gross_us_canada'].fillna(0)
+
+clean_top_25_movie_df = top_25_movie_df.copy()
+clean_top_25_movie_df['gross_us_canada'] = clean_recent_movie_df['gross_us_canada'].fillna(0)
+
+
+
+# Random
+Xr = clean_recent_movie_df[['gross_us_canada']].values
+yr = clean_recent_movie_df['rating'].values
+model_r = LinearRegression().fit(Xr, yr)
+print("Recent slope:", model_r.coef_[0])
+
+# Top 25
+Xt = clean_top_25_movie_df[['gross_us_canada']].values
+yt = clean_top_25_movie_df['rating'].values
+model_t = LinearRegression().fit(Xt, yt)
+print("Top slope:", model_t.coef_[0])
+
+```
+
+
+```{python}
+import matplotlib.pyplot as plt
+import numpy as np
+
+def plot_group(df, ax, title):
+    
+    ax.scatter(df['rating'], df['gross_us_canada'])
+    
+    # Regression line
+    x = df['rating']
+    y = df['gross_us_canada']
+    m, b = np.polyfit(x, y, 1)
+    ax.plot(x, m*x + b)
+
+    #label points with movie titles
+    for i, row in df.iterrows():
+        ax.text(row['rating'], row['gross_us_canada'], row['title'],
+                fontsize=6, alpha=0.6)
+
+    ax.set_title(title)
+    ax.set_xlabel("IMDb Rating")
+    ax.set_ylabel("Gross (US & Canada)")
+
+
+
+# Plot
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+plot_group(recent_movie_df, axes[0], "Recent 25 Movies")
+plot_group(top_25_movie_df, axes[1], "Top 25 IMDb Movies")
+
+plt.tight_layout()
+plt.savefig("final_plot.png")
+plt.show()
+
+```
+
+
+```{python}
+import statsmodels.formula.api as smf
+model = smf.ols('gross_us_canada ~ rating' , data=recent_movie_df)
+results = model.fit()
+display(results.summary())
+```
+
+
+```{python}
+model2 = smf.ols('gross_us_canada ~ rating' , data=top_25_movie_df)
+results2 = model2.fit()
+display(results2.summary())
+```
